@@ -494,13 +494,14 @@
   #vignette-bg.show { opacity: 1; }
 
   /* Gradual darkness levels applied to body during confirm */
-  body.confirm-step-1 { --dark-vignette: rgba(0,0,0,0.35); }
-  body.confirm-step-2 { --dark-vignette: rgba(0,0,0,0.52); }
-  body.confirm-step-3 { --dark-vignette: rgba(0,0,0,0.65); }
-  body.confirm-step-4 { --dark-vignette: rgba(0,0,0,0.75); }
-  body.confirm-step-5 { --dark-vignette: rgba(0,0,0,0.83); }
-  body.confirm-step-6 { --dark-vignette: rgba(0,0,0,0.90); }
+  body.confirm-step-1 { --dark-vignette: rgba(0,0,0,0.30); }
+  body.confirm-step-2 { --dark-vignette: rgba(0,0,0,0.42); }
+  body.confirm-step-3 { --dark-vignette: rgba(0,0,0,0.52); }
+  body.confirm-step-4 { --dark-vignette: rgba(0,0,0,0.60); }
+  body.confirm-step-5 { --dark-vignette: rgba(0,0,0,0.67); }
+  body.confirm-step-6 { --dark-vignette: rgba(0,0,0,0.72); }
 
+  /* Vignette sits BELOW the confirm screen content (z-index: 5) */
   #vignette-outer {
     position: fixed; inset: 0; z-index: 2;
     pointer-events: none;
@@ -509,9 +510,12 @@
   }
 
   /* ─── CONFIRM SCREEN ─── */
+  /* z-index: 5 (from .screen) is already above vignette (z-index: 2) */
   #screen-confirm {
     background: transparent;
     color: var(--gray-text);
+    /* Ensure text and buttons are always readable above the vignette */
+    isolation: isolate;
   }
   .confirm-counter-dots {
     display: flex; gap: 8px;
@@ -918,7 +922,8 @@
 <div id="color-overlay"></div>
 
 <!-- Background video for final reveal -->
-<video id="bg-video" loop muted playsinline preload="auto">
+<video id="bg-video" loop muted playsinline preload="metadata">
+  <source src="./bebe.mp4" type="video/mp4">
   <source src="bebe.mp4" type="video/mp4">
 </video>
 
@@ -1539,11 +1544,13 @@ function showConfirmQuestion(i) {
   );
   document.body.classList.add('confirm-step-' + (i + 1));
 
+  // Fade out, clear text, then fade in new question (prevents text overlap)
   qEl.classList.add('fading');
+  qEl.textContent = ''; // clear immediately so old text doesn't bleed through
   setTimeout(() => {
     qEl.textContent = CONFIRM_QUESTIONS[i];
     qEl.classList.remove('fading');
-  }, 300);
+  }, 320);
 }
 
 function confirmAnswer(e, answer) {
@@ -1570,8 +1577,21 @@ function confirmAnswer(e, answer) {
   }
 }
 
+/* ════════════════════════════════════════ MÚSICA (golden hour) ══════ */
+let goldenHourAudio = null;
+function playGoldenHour() {
+  if (goldenHourAudio) return; // already playing
+  goldenHourAudio = new Audio('JVKE - golden hour (official music video).mp3');
+  goldenHourAudio.onerror = () => console.warn('golden hour audio not found');
+  goldenHourAudio.play().catch(() => {});
+}
+
 /* ════════════════════════════════════════ COUNTDOWN ════════════════ */
+let countdownRunning = false; // guard against double-call
 function startCountdown(msg, onDone) {
+  if (countdownRunning) return; // prevent re-entry
+  countdownRunning = true;
+
   const overlay = document.getElementById('countdown-overlay');
   const msgEl   = document.getElementById('countdown-msg');
   const numEl   = document.getElementById('countdown-number');
@@ -1584,9 +1604,16 @@ function startCountdown(msg, onDone) {
     numEl.textContent = count;
     tone(count === 0 ? 1047 : 660, count === 0 ? 0.5 : 0.1, 0, 'sine', count === 0 ? 0.14 : 0.09);
     vibrate(count === 0 ? [40,60,40] : 15);
+
+    // Play golden hour music when countdown reaches 3
+    if (count === 3) {
+      playGoldenHour();
+    }
+
     if (count <= 0) {
       setTimeout(() => {
         overlay.classList.remove('active');
+        countdownRunning = false;
         setTimeout(onDone, 500);
       }, 800);
       return;
@@ -1678,11 +1705,14 @@ function spinSlot() {
   }, SPIN_DURATION - 100);
 
   // After landing, show countdown then transition to video reveal
+  // Only trigger if not already in a countdown (e.g. triggered by "Não" path)
   setTimeout(() => {
-    startCountdown(
-      'mas antes, segure a emoção e vamos de contagem regressiva',
-      transitionToVideo
-    );
+    if (!countdownRunning) {
+      startCountdown(
+        'mas antes, segure a emoção e vamos de contagem regressiva',
+        transitionToVideo
+      );
+    }
   }, SPIN_DURATION + 1100);
 }
 
@@ -1774,11 +1804,17 @@ document.getElementById('screen-final-reveal').addEventListener('click', (e) => 
   }, { once: true });
 });
 
-/* ════════════════════════════════════════ VIDEO ERROR ═══════════════ */
-document.getElementById('bg-video').addEventListener('error', () => {
-  console.warn('bebe.mp4 failed to load.');
-  document.getElementById('screen-final-reveal').style.background = 'linear-gradient(180deg, #B0D8F4 0%, #5BA8E5 100%)';
-});
+/* ════════════════════════════════════════ VIDEO SETUP ══════════════ */
+(function setupBgVideo() {
+  const vid = document.getElementById('bg-video');
+  // Try to load eagerly so it is ready when needed
+  vid.load();
+  vid.addEventListener('error', () => {
+    console.warn('bebe.mp4 failed to load – applying gradient fallback.');
+    document.getElementById('screen-final-reveal').style.background =
+      'linear-gradient(180deg, #B0D8F4 0%, #5BA8E5 100%)';
+  });
+})();
 </script>
 </body>
 </html>
