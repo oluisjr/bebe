@@ -481,6 +481,7 @@
   #color-overlay.active { pointer-events: all; opacity: 1; }
 
   /* ─── VIGNETTE BG (confirm/slot) ─── */
+  /* Simple edge vignette – does NOT cover any UI content */
   #vignette-bg {
     position: fixed; inset: 0; z-index: 1;
     pointer-events: none;
@@ -493,30 +494,35 @@
   }
   #vignette-bg.show { opacity: 1; }
 
-  /* Gradual darkness levels applied to body during confirm */
-  body.confirm-step-1 { --dark-vignette: rgba(0,0,0,0.30); }
-  body.confirm-step-2 { --dark-vignette: rgba(0,0,0,0.42); }
-  body.confirm-step-3 { --dark-vignette: rgba(0,0,0,0.52); }
-  body.confirm-step-4 { --dark-vignette: rgba(0,0,0,0.60); }
-  body.confirm-step-5 { --dark-vignette: rgba(0,0,0,0.67); }
-  body.confirm-step-6 { --dark-vignette: rgba(0,0,0,0.72); }
-
-  /* Vignette sits BELOW the confirm screen content (z-index: 5) */
-  #vignette-outer {
-    position: fixed; inset: 0; z-index: 2;
-    pointer-events: none;
-    background: var(--dark-vignette, rgba(0,0,0,0));
-    transition: background 1s ease;
-  }
+  /* #vignette-outer is no longer used for darkening – kept for compatibility */
+  #vignette-outer { display: none; }
 
   /* ─── CONFIRM SCREEN ─── */
-  /* z-index: 5 (from .screen) is already above vignette (z-index: 2) */
+  /* The darkening is done via a ::before pseudo-element INSIDE the screen,
+     so it sits behind the question text and buttons but above the starfield. */
   #screen-confirm {
     background: transparent;
     color: var(--gray-text);
-    /* Ensure text and buttons are always readable above the vignette */
-    isolation: isolate;
   }
+  #screen-confirm::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--confirm-dark, rgba(0,0,0,0));
+    transition: background 1s ease;
+    z-index: 0; /* behind the flex children */
+    pointer-events: none;
+  }
+  /* Lift all direct children above the pseudo-element */
+  #screen-confirm > * { position: relative; z-index: 1; }
+
+  /* Progressive darkness levels – now ONLY darken the confirm background */
+  body.confirm-step-1 #screen-confirm { --confirm-dark: rgba(0,0,0,0.28); }
+  body.confirm-step-2 #screen-confirm { --confirm-dark: rgba(0,0,0,0.38); }
+  body.confirm-step-3 #screen-confirm { --confirm-dark: rgba(0,0,0,0.46); }
+  body.confirm-step-4 #screen-confirm { --confirm-dark: rgba(0,0,0,0.54); }
+  body.confirm-step-5 #screen-confirm { --confirm-dark: rgba(0,0,0,0.60); }
+  body.confirm-step-6 #screen-confirm { --confirm-dark: rgba(0,0,0,0.65); }
   .confirm-counter-dots {
     display: flex; gap: 8px;
     margin-bottom: 32px;
@@ -1565,15 +1571,12 @@ function confirmAnswer(e, answer) {
 
   if (!isLast) {
     showConfirmQuestion(confirmIndex + 1);
-  } else if (answer === 'nao') {
-    // "Não" na última: mensagem especial + contagem regressiva → slot
-    setTimeout(() => startCountdown(
-      'Agora eu quero mostrar, segura a emoção e vamos de contagem regressiva',
-      () => goToSlot()
-    ), 500);
   } else {
-    // "Sim" na última → slot (countdown virá antes do reveal)
-    setTimeout(goToSlot, 700);
+    // Última resposta (Sim ou Não) → countdown PRIMEIRO, depois slot gira
+    const countdownMsg = answer === 'nao'
+      ? 'Agora eu quero mostrar, segura a emoção e vamos de contagem regressiva'
+      : 'Prepare-se para a grande revelação... contagem regressiva!';
+    setTimeout(() => startCountdown(countdownMsg, goToSlot), 500);
   }
 }
 
@@ -1582,7 +1585,12 @@ let goldenHourAudio = null;
 function playGoldenHour() {
   if (goldenHourAudio) return; // already playing
   goldenHourAudio = new Audio('JVKE - golden hour (official music video).mp3');
+  goldenHourAudio.currentTime = 42; // start at 0:42
   goldenHourAudio.onerror = () => console.warn('golden hour audio not found');
+  // currentTime must be set after canplay when src is set fresh
+  goldenHourAudio.addEventListener('canplay', () => {
+    if (goldenHourAudio.currentTime < 42) goldenHourAudio.currentTime = 42;
+  }, { once: true });
   goldenHourAudio.play().catch(() => {});
 }
 
@@ -1644,6 +1652,11 @@ function goToSlot() {
     'confirm-step-4','confirm-step-5','confirm-step-6'
   );
 
+  // Start bg-video now so it plays behind the slot screen too
+  const bgVid = document.getElementById('bg-video');
+  bgVid.play().catch(() => {});
+  document.body.classList.add('show-bg-video');
+
   // Compose the pretext lines
   const line1 = document.getElementById('slot-line-1');
   const line2 = document.getElementById('slot-line-2');
@@ -1704,16 +1717,8 @@ function spinSlot() {
     vibrate([40, 60, 100]);
   }, SPIN_DURATION - 100);
 
-  // After landing, show countdown then transition to video reveal
-  // Only trigger if not already in a countdown (e.g. triggered by "Não" path)
-  setTimeout(() => {
-    if (!countdownRunning) {
-      startCountdown(
-        'mas antes, segure a emoção e vamos de contagem regressiva',
-        transitionToVideo
-      );
-    }
-  }, SPIN_DURATION + 1100);
+  // After landing, go straight to video reveal (countdown already happened BEFORE)
+  setTimeout(transitionToVideo, SPIN_DURATION + 1200);
 }
 
 /* ════════════════════════════════════════ TRANSITION → VIDEO ════════ */
@@ -1737,10 +1742,9 @@ function transitionToVideo() {
     document.getElementById('screen-final-reveal').classList.add('active');
     currentScreen = 'finalReveal';
 
-    // Play bg-video (bebe.mp4) in loop
+    // bg-video already started in goToSlot(); just ensure it's playing
     const bgVid = document.getElementById('bg-video');
-    bgVid.play().catch(() => {});
-    document.body.classList.add('show-bg-video');
+    if (bgVid.paused) bgVid.play().catch(() => {});
 
     setTimeout(() => {
       document.getElementById('screen-final-reveal').classList.add('video-on');
