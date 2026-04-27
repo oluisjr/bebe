@@ -480,9 +480,37 @@
   }
   #color-overlay.active { pointer-events: all; opacity: 1; }
 
+  /* ─── VIGNETTE BG (confirm/slot) ─── */
+  #vignette-bg {
+    position: fixed; inset: 0; z-index: 1;
+    pointer-events: none;
+    background: radial-gradient(ellipse 55% 55% at 50% 50%,
+      rgba(80,80,80,0.22) 0%,
+      rgba(0,0,0,0) 60%,
+      rgba(0,0,0,1) 100%);
+    opacity: 0;
+    transition: opacity 0.9s ease;
+  }
+  #vignette-bg.show { opacity: 1; }
+
+  /* Gradual darkness levels applied to body during confirm */
+  body.confirm-step-1 { --dark-vignette: rgba(0,0,0,0.35); }
+  body.confirm-step-2 { --dark-vignette: rgba(0,0,0,0.52); }
+  body.confirm-step-3 { --dark-vignette: rgba(0,0,0,0.65); }
+  body.confirm-step-4 { --dark-vignette: rgba(0,0,0,0.75); }
+  body.confirm-step-5 { --dark-vignette: rgba(0,0,0,0.83); }
+  body.confirm-step-6 { --dark-vignette: rgba(0,0,0,0.90); }
+
+  #vignette-outer {
+    position: fixed; inset: 0; z-index: 2;
+    pointer-events: none;
+    background: var(--dark-vignette, rgba(0,0,0,0));
+    transition: background 1s ease;
+  }
+
   /* ─── CONFIRM SCREEN ─── */
   #screen-confirm {
-    background: var(--gray-bg);
+    background: transparent;
     color: var(--gray-text);
   }
   .confirm-counter-dots {
@@ -534,7 +562,7 @@
 
   /* ─── SLOT SCREEN ─── */
   #screen-slot {
-    background: var(--gray-bg);
+    background: transparent;
     color: var(--gray-text);
   }
   .slot-pretext {
@@ -582,11 +610,11 @@
   }
   .slot-window::before {
     top: 0;
-    background: linear-gradient(to bottom, var(--gray-bg) 0%, transparent 100%);
+    background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
   }
   .slot-window::after {
     bottom: 0;
-    background: linear-gradient(to top, var(--gray-bg) 0%, transparent 100%);
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
   }
   .slot-strip {
     transform: translateY(0);
@@ -609,9 +637,55 @@
     text-shadow: 0 0 30px rgba(91,168,229,0.6);
   }
 
+  /* ─── BG VIDEO (bebe.mp4) ─── */
+  #bg-video {
+    position: fixed; inset: 0; z-index: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1.2s ease;
+  }
+  body.show-bg-video #bg-video { opacity: 1; }
+
+  /* ─── COUNTDOWN OVERLAY ─── */
+  #countdown-overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,0.88);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 28px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+  #countdown-overlay.active { opacity: 1; pointer-events: all; }
+  #countdown-msg {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: clamp(17px, 4.5vw, 22px);
+    color: var(--cream-dim);
+    text-align: center;
+    max-width: 320px;
+    line-height: 1.4;
+    padding: 0 24px;
+  }
+  #countdown-number {
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 900;
+    font-size: clamp(80px, 25vw, 140px);
+    color: white;
+    line-height: 1;
+    text-shadow: 0 0 40px rgba(91,168,229,0.5);
+    animation: countPulse 1s ease-in-out infinite;
+  }
+  @keyframes countPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.08); opacity: 0.85; }
+  }
+
   /* ─── FINAL REVEAL (VIDEO) ─── */
   #screen-final-reveal {
-    background: white;
+    background: black;
     overflow: hidden;
   }
   .reveal-video {
@@ -843,6 +917,21 @@
 <canvas id="confetti-canvas"></canvas>
 <div id="color-overlay"></div>
 
+<!-- Background video for final reveal -->
+<video id="bg-video" loop muted playsinline preload="auto">
+  <source src="bebe.mp4" type="video/mp4">
+</video>
+
+<!-- Vignette layers for confirm screen effect -->
+<div id="vignette-outer"></div>
+<div id="vignette-bg"></div>
+
+<!-- Countdown overlay -->
+<div id="countdown-overlay">
+  <p id="countdown-msg"></p>
+  <div id="countdown-number">10</div>
+</div>
+
 <div class="seals" id="seals">
   <div class="seal" data-i="0"></div>
   <div class="seal" data-i="1"></div>
@@ -977,9 +1066,6 @@
 
   <!-- FINAL REVEAL WITH VIDEO -->
   <div class="screen" id="screen-final-reveal">
-    <video class="reveal-video" id="reveal-video" loop muted playsinline preload="auto">
-      <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260417_061226_74f0749c-a22d-42b3-895e-5d6203bc741c.mp4" type="video/mp4">
-    </video>
     <div class="video-overlay"></div>
     <div class="final-content">
       <p class="final-eyebrow">É um pequeno</p>
@@ -1404,29 +1490,21 @@ function startColorShift() {
     playClick();
   }, 1100);
 
-  // 3. After hold on white, fade to gray
+  // 3. Fade out overlay, activate confirm screen with vignette
   setTimeout(() => {
-    overlay.style.background = 'var(--gray-bg)';
-  }, 1900);
-
-  // 4. Hide pattern, show confirm. Overlay stays as backdrop matching gray
-  setTimeout(() => {
+    overlay.style.opacity = '0';
     document.getElementById('screen-pattern').classList.remove('active');
     document.getElementById('screen-confirm').classList.add('active');
     currentScreen = 'confirm';
+    document.getElementById('vignette-bg').classList.add('show');
     showConfirmQuestion(0);
-  }, 2700);
-
-  // 5. Fade out overlay over the gray confirm screen
-  setTimeout(() => {
-    overlay.style.opacity = '0';
-  }, 3000);
+  }, 1900);
 
   setTimeout(() => {
     overlay.classList.remove('active');
     overlay.style.opacity = '';
     overlay.style.background = '#000';
-  }, 3700);
+  }, 2700);
 }
 
 /* ════════════════════════════════════════ CONFIRM ═══════════════════ */
@@ -1446,13 +1524,20 @@ function showConfirmQuestion(i) {
   const qEl = document.getElementById('confirm-question');
   const dotsEl = document.getElementById('confirm-dots');
 
-  // Build progress dots (subtle, just to show advancing)
+  // Build progress dots
   dotsEl.innerHTML = '';
   for (let k = 0; k < CONFIRM_QUESTIONS.length; k++) {
     const d = document.createElement('div');
     d.className = 'cd' + (k < i ? ' filled' : '');
     dotsEl.appendChild(d);
   }
+
+  // Progressive darkening
+  document.body.classList.remove(
+    'confirm-step-1','confirm-step-2','confirm-step-3',
+    'confirm-step-4','confirm-step-5','confirm-step-6'
+  );
+  document.body.classList.add('confirm-step-' + (i + 1));
 
   qEl.classList.add('fading');
   setTimeout(() => {
@@ -1469,12 +1554,47 @@ function confirmAnswer(e, answer) {
   playClick();
   vibrate(20);
 
-  if (confirmIndex < CONFIRM_QUESTIONS.length - 1) {
+  const isLast = confirmIndex >= CONFIRM_QUESTIONS.length - 1;
+
+  if (!isLast) {
     showConfirmQuestion(confirmIndex + 1);
+  } else if (answer === 'nao') {
+    // "Não" na última: mensagem especial + contagem regressiva → slot
+    setTimeout(() => startCountdown(
+      'Agora eu quero mostrar, segura a emoção e vamos de contagem regressiva',
+      () => goToSlot()
+    ), 500);
   } else {
-    // After last question, go to slot
+    // "Sim" na última → slot (countdown virá antes do reveal)
     setTimeout(goToSlot, 700);
   }
+}
+
+/* ════════════════════════════════════════ COUNTDOWN ════════════════ */
+function startCountdown(msg, onDone) {
+  const overlay = document.getElementById('countdown-overlay');
+  const msgEl   = document.getElementById('countdown-msg');
+  const numEl   = document.getElementById('countdown-number');
+  msgEl.textContent = msg;
+  numEl.textContent = '10';
+  overlay.classList.add('active');
+
+  let count = 10;
+  function tick() {
+    numEl.textContent = count;
+    tone(count === 0 ? 1047 : 660, count === 0 ? 0.5 : 0.1, 0, 'sine', count === 0 ? 0.14 : 0.09);
+    vibrate(count === 0 ? [40,60,40] : 15);
+    if (count <= 0) {
+      setTimeout(() => {
+        overlay.classList.remove('active');
+        setTimeout(onDone, 500);
+      }, 800);
+      return;
+    }
+    count--;
+    setTimeout(tick, 1000);
+  }
+  setTimeout(tick, 800);
 }
 
 /* ════════════════════════════════════════ SLOT ══════════════════════ */
@@ -1490,6 +1610,12 @@ function goToSlot() {
   document.getElementById('screen-confirm').classList.remove('active');
   document.getElementById('screen-slot').classList.add('active');
   currentScreen = 'slot';
+
+  // Remove confirm darkening
+  document.body.classList.remove(
+    'confirm-step-1','confirm-step-2','confirm-step-3',
+    'confirm-step-4','confirm-step-5','confirm-step-6'
+  );
 
   // Compose the pretext lines
   const line1 = document.getElementById('slot-line-1');
@@ -1551,16 +1677,24 @@ function spinSlot() {
     vibrate([40, 60, 100]);
   }, SPIN_DURATION - 100);
 
-  // After landing, transition to video reveal
-  setTimeout(transitionToVideo, SPIN_DURATION + 1100);
+  // After landing, show countdown then transition to video reveal
+  setTimeout(() => {
+    startCountdown(
+      'mas antes, segure a emoção e vamos de contagem regressiva',
+      transitionToVideo
+    );
+  }, SPIN_DURATION + 1100);
 }
 
 /* ════════════════════════════════════════ TRANSITION → VIDEO ════════ */
 function transitionToVideo() {
-  // Fade gray → white via a quick overlay
+  // Hide vignette if still visible
+  document.getElementById('vignette-bg').classList.remove('show');
+
+  // Fade black → white via overlay
   const overlay = document.getElementById('color-overlay');
   overlay.style.transition = 'opacity 0.7s ease, background-color 0.6s ease';
-  overlay.style.background = 'var(--gray-bg)';
+  overlay.style.background = '#000';
   overlay.style.opacity = '1';
   overlay.classList.add('active');
 
@@ -1573,12 +1707,10 @@ function transitionToVideo() {
     document.getElementById('screen-final-reveal').classList.add('active');
     currentScreen = 'finalReveal';
 
-    // Try to play video
-    const vid = document.getElementById('reveal-video');
-    const playPromise = vid.play();
-    if (playPromise && playPromise.catch) {
-      playPromise.catch(() => {/* autoplay blocked, fallback handled */});
-    }
+    // Play bg-video (bebe.mp4) in loop
+    const bgVid = document.getElementById('bg-video');
+    bgVid.play().catch(() => {});
+    document.body.classList.add('show-bg-video');
 
     setTimeout(() => {
       document.getElementById('screen-final-reveal').classList.add('video-on');
@@ -1643,9 +1775,8 @@ document.getElementById('screen-final-reveal').addEventListener('click', (e) => 
 });
 
 /* ════════════════════════════════════════ VIDEO ERROR ═══════════════ */
-document.getElementById('reveal-video').addEventListener('error', () => {
-  // Fallback: keep solid white background, no video
-  console.warn('Video failed to load. Showing fallback.');
+document.getElementById('bg-video').addEventListener('error', () => {
+  console.warn('bebe.mp4 failed to load.');
   document.getElementById('screen-final-reveal').style.background = 'linear-gradient(180deg, #B0D8F4 0%, #5BA8E5 100%)';
 });
 </script>
