@@ -1133,7 +1133,8 @@
 
     /* ─── FINAL REVEAL (VIDEO) ─── */
     #screen-final-reveal {
-      background: transparent; /* bg-video (fixed, z-index:0) provides the background */
+      background: transparent;
+      /* bg-video (fixed, z-index:0) provides the background */
       overflow: hidden;
     }
 
@@ -2280,7 +2281,7 @@
       if (goldenHourPlaying) return;
       goldenHourPlaying = true;
       goldenHourAudio.currentTime = 42;
-      goldenHourAudio.play().catch(() => {});
+      goldenHourAudio.play().catch(() => { });
     }
 
     /* ════════════════════════════════════════ COUNTDOWN ════════════════ */
@@ -2503,13 +2504,17 @@
       bgVid.play().then(() => {
         bgVid.pause();
         bgVid.currentTime = 0;
-      }).catch(() => {});
+      }).catch(() => { });
 
-      // Unlock golden hour audio (pre-created at parse time)
+      // Unlock golden hour audio silently (volume = 0 during unlock so user hears nothing)
+      goldenHourAudio.volume = 0;
       goldenHourAudio.play().then(() => {
         goldenHourAudio.pause();
         goldenHourAudio.currentTime = 0;
-      }).catch(() => {});
+        goldenHourAudio.volume = 1; // restore full volume for actual playback
+      }).catch(() => {
+        goldenHourAudio.volume = 1; // restore even on failure
+      });
     }
 
     ['touchstart', 'click', 'pointerdown'].forEach(evt => {
