@@ -2270,17 +2270,17 @@
     }
 
     /* ════════════════════════════════════════ MÚSICA (golden hour) ══════ */
-    let goldenHourAudio = null;
+    // Pre-create the audio so it can be unlocked on first user gesture (Safari)
+    let goldenHourAudio = new Audio('JVKE - golden hour (official music video).mp3');
+    goldenHourAudio.preload = 'auto';
+    goldenHourAudio.onerror = () => console.warn('golden hour audio not found');
+    let goldenHourPlaying = false;
+
     function playGoldenHour() {
-      if (goldenHourAudio) return; // already playing
-      goldenHourAudio = new Audio('JVKE - golden hour (official music video).mp3');
-      goldenHourAudio.currentTime = 42; // start at 0:42
-      goldenHourAudio.onerror = () => console.warn('golden hour audio not found');
-      // currentTime must be set after canplay when src is set fresh
-      goldenHourAudio.addEventListener('canplay', () => {
-        if (goldenHourAudio.currentTime < 42) goldenHourAudio.currentTime = 42;
-      }, { once: true });
-      goldenHourAudio.play().catch(() => { });
+      if (goldenHourPlaying) return;
+      goldenHourPlaying = true;
+      goldenHourAudio.currentTime = 42;
+      goldenHourAudio.play().catch(() => {});
     }
 
     /* ════════════════════════════════════════ COUNTDOWN ════════════════ */
@@ -2302,9 +2302,9 @@
         tone(count === 0 ? 1047 : 660, count === 0 ? 0.5 : 0.1, 0, 'sine', count === 0 ? 0.14 : 0.09);
         vibrate(count === 0 ? [40, 60, 40] : 15);
 
-        // Play golden hour music 4s after countdown reaches 1
+        // Play golden hour music 2s after countdown reaches 1
         if (count === 1) {
-          setTimeout(playGoldenHour, 3000);
+          setTimeout(playGoldenHour, 2000);
         }
 
         if (count <= 0) {
@@ -2485,18 +2485,40 @@
       vibrate([30, 50, 30]);
     });
 
-    /* ════════════════════════════════════════ AUDIO RESUME ══════════════ */
-    ['touchstart', 'click'].forEach(evt => {
-      document.body.addEventListener(evt, () => {
-        const ac = getAC();
-        if (ac && ac.state === 'suspended') ac.resume();
-      }, { once: true });
+    /* ════════════════════════════════════════ SAFARI MEDIA UNLOCK ═══════ */
+    // iOS/Safari blocks any media play() not triggered directly by a user gesture.
+    // Solution: on the very first interaction, play()-then-pause both elements to
+    // "unlock" them. All later programmatic play() calls will succeed.
+    let mediaUnlocked = false;
+    function unlockMedia() {
+      if (mediaUnlocked) return;
+      mediaUnlocked = true;
+
+      // Resume Web Audio API
+      const ac = getAC();
+      if (ac && ac.state === 'suspended') ac.resume();
+
+      // Unlock bg-video
+      const bgVid = document.getElementById('bg-video');
+      bgVid.play().then(() => {
+        bgVid.pause();
+        bgVid.currentTime = 0;
+      }).catch(() => {});
+
+      // Unlock golden hour audio (pre-created at parse time)
+      goldenHourAudio.play().then(() => {
+        goldenHourAudio.pause();
+        goldenHourAudio.currentTime = 0;
+      }).catch(() => {});
+    }
+
+    ['touchstart', 'click', 'pointerdown'].forEach(evt => {
+      document.body.addEventListener(evt, unlockMedia, { once: true, passive: true });
     });
 
     /* ════════════════════════════════════════ VIDEO SETUP ══════════════ */
     (function setupBgVideo() {
       const vid = document.getElementById('bg-video');
-      // Try to load eagerly so it is ready when needed
       vid.load();
       vid.addEventListener('error', () => {
         console.warn('bebe.mp4 failed to load – applying gradient fallback.');
