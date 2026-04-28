@@ -1133,7 +1133,7 @@
 
     /* ─── FINAL REVEAL (VIDEO) ─── */
     #screen-final-reveal {
-      background: black;
+      background: transparent; /* bg-video (fixed, z-index:0) provides the background */
       overflow: hidden;
     }
 
@@ -2302,9 +2302,9 @@
         tone(count === 0 ? 1047 : 660, count === 0 ? 0.5 : 0.1, 0, 'sine', count === 0 ? 0.14 : 0.09);
         vibrate(count === 0 ? [40, 60, 40] : 15);
 
-        // Play golden hour music when countdown reaches 3
+        // Play golden hour music 2s after countdown reaches 1
         if (count === 1) {
-          playGoldenHour();
+          setTimeout(playGoldenHour, 2000);
         }
 
         if (count <= 0) {
